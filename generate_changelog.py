@@ -4,6 +4,7 @@ import json
 import requests
 from optparse import OptionParser
 from subprocess import Popen, PIPE
+from pylru import lrudecorator
 
 
 def read_commits(repo_path, from_tag):
@@ -27,7 +28,7 @@ def read_commits(repo_path, from_tag):
             results.append((name, email, comment))
     return results
 
-
+@lrudecorator(300)
 def retrieve_author_url(name):
     """
     Search for github commiter profile by name.
@@ -39,7 +40,8 @@ def retrieve_author_url(name):
     if data.get('total_count', None) == 1:
         return data['items'][0]['html_url']
     else:
-        print 'BOO', data
+        print "--- ERROR: no author URL retrieved for '{0}' ---".format(
+            response.url)
         return name
 
 

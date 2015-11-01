@@ -7,6 +7,61 @@ from subprocess import Popen, PIPE
 from pylru import lrudecorator
 
 
+class Commit(object):
+
+    href = None
+    author = None
+    email = None
+    comment = None
+    parents = None
+
+    def __init__(self, href, author, email, comment, parents=None):
+        self.href = href
+        self.author = author
+        self.email = email
+        self.comment = comment
+        self.parents = parents
+
+    def is_merge(self):
+        return len(self.parents) > 1
+
+    def __str__(self):
+        return "".format('{0}:\n{1}\n{2}\n{3}\nParents:\n{4}',
+                         self.href,
+                         self.author,
+                         self.email,
+                         self.comment,
+                         self.parents)
+
+
+class CommitList(object):
+
+    commits = []
+
+    def add(self, line):
+        elements = CommitList.parse_log_command(line)
+        commit = Commit(*elements)
+        self.commits.append(commit)
+
+    @staticmethod
+    def parse_log_command(line):
+        line = line.strip()
+        refs, details = line.rsplit('|', 1)
+        href, parent_hrefs = refs.split(',', 1)
+        parents = parent_hrefs.split()
+        name, email, comment = details.split(',', 2)
+        return href, name, email, comment, parents
+
+    @staticmethod
+    def create_log_command(from_tag):
+        return [
+            'git',
+            'log',
+            "--pretty=format:%h,%p|%aN,%aE,%s",
+            from_tag + '..'
+        ]
+
+
 def read_commits(repo_path, from_tag):
     """
     Get all commits starting from specified tag
@@ -15,18 +70,19 @@ def read_commits(repo_path, from_tag):
     :return: tuples (name, email, comment)
     """
 
+    commit_list = CommitList()
+
     child = Popen(
-        ['git', 'log', "--pretty=format:%aN,%aE,%s", from_tag + '..'],
+        CommitList.create_log_command(from_tag),
         cwd=os.path.expanduser(repo_path),
         stdout=PIPE)
 
-    results = []
     for line in child.stdout:
         if line:
-            line = line.strip()
-            name, email, comment = line.split(',', 2)
-            results.append((name, email, comment))
-    return results
+            commit_list.add(line)
+
+    return commit_list
+
 
 @lrudecorator(300)
 def retrieve_author_url(name):
@@ -45,7 +101,7 @@ def retrieve_author_url(name):
         return name
 
 
-def generate_changelog(commits):
+def generate_changelog(commit_list):
     """
     Retrieve github authors and generate changelog entries:
 
@@ -55,24 +111,28 @@ def generate_changelog(commits):
 
     .. _`Author Name`: http://url
 
-    :param commits: tuples
+    :param commit_list: CommitList
     :return: string
     """
 
     authors = {}
 
-    for name, email, comment in commits:
-        if email not in authors:
-            authors[email] = {
-                'name': name,
-                'profile': retrieve_author_url(name)
+    for commit in commit_list.commits:
+        if commit.email not in authors:
+            authors[commit.email] = {
+                'name': commit.author,
+                'profile': retrieve_author_url(commit.author)
             }
 
         # Make sure comment has a dot. And only one dot.
-        comment = comment.strip('.')
+        comment = commit.comment.strip('.')
         comment += '.'
 
-        print "* {0} (Thanks: `{1}`_).".format(comment, name)
+        prefix = '' if commit.is_merge() else '    *'
+        print "{2} {0} (Thanks: `{1}`_).".format(
+            comment,
+            commit.author,
+            prefix)
 
     print ''
     for k in sorted(authors.keys()):

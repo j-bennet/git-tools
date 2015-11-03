@@ -101,7 +101,7 @@ def retrieve_author_url(name):
         return name
 
 
-def generate_changelog(commit_list):
+def generate_changelog(commit_list, filetype='rst'):
     """
     Retrieve github authors and generate changelog entries:
 
@@ -128,24 +128,35 @@ def generate_changelog(commit_list):
         comment = commit.comment.strip('.')
         comment += '.'
 
-        prefix = '' if commit.is_merge() else '    *'
-        print "{2} {0} (Thanks: `{1}`_).".format(
-            comment,
-            commit.author,
-            prefix)
+        prefix = '' if commit.is_merge() else '*'
+        if filetype == 'rst':
+            print "{2} {0} (Thanks: `{1}`_).".format(
+                comment,
+                commit.author,
+                prefix)
+        else:
+            print "{2} {0} (Thanks: [{1}]).".format(
+                comment,
+                commit.author,
+                prefix)
 
     print ''
     for k in sorted(authors.keys()):
-        print ".. _`{0}`: {1}".format(authors[k]['name'], authors[k]['profile'])
+        if filetype == 'rst':
+            print ".. _`{0}`: {1}".format(authors[k]['name'], authors[k]['profile'])
+        else:
+            print '[{0}]: {1}'.format(authors[k]['name'], authors[k]['profile'])
 
 
 def main():
     parser = OptionParser()
-    parser.add_option("-r", "--repo", dest="repo", help="Repository location")
+    parser.add_option("-r", "--repo", dest="repo", default='.', help="Repository location")
+    parser.add_option("-f", "--filetype", dest="filetype", default='rst',
+                      help="Filetype for output. rst or md")
     parser.add_option("-s", "--start", dest="start",
                       help="Tag to start reading entries from.")
     opts, args = parser.parse_args()
-    generate_changelog(read_commits(opts.repo, opts.start))
+    generate_changelog(read_commits(opts.repo, opts.start), filetype=opts.filetype)
 
 
 if __name__ == '__main__':

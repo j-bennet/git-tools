@@ -93,7 +93,7 @@ def retrieve_author_url(name):
     """
     response = requests.get('https://api.github.com/search/users', {'q': name})
     data = json.loads(response.text)
-    if data.get('total_count', None) == 1:
+    if data.get('total_count', 0) > 0:
         return data['items'][0]['html_url']
     else:
         print "--- ERROR: no author URL retrieved for '{0}' ---".format(
